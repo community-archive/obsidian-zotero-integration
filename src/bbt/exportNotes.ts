@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync } from 'fs';
+import { copyFileSync, existsSync, mkdirSync, unlinkSync } from 'fs';
 import {
   Editor,
   Notice,
@@ -13,7 +13,7 @@ import { getVaultRoot } from 'src/helpers';
 import { DatabaseWithPort } from 'src/types';
 
 import { getCiteKeys } from './cayw';
-import { getLocalURI, mkMDDir, sanitizeFilePath } from './helpers';
+import { convertImageToFormat, getLocalURI, mkMDDir, sanitizeFilePath } from './helpers';
 import { getAttachmentsFromCiteKey, getNotesFromCiteKeys } from './jsonRPC';
 import { removeStartingSlash } from './template.helpers';
 
@@ -21,7 +21,9 @@ export async function processZoteroAnnotationNotes(
   key: string,
   noteStr: string,
   attachments: Record<string, any>,
-  destination?: string
+  destination?: string,
+  imageFormat?: string,
+  imageQuality: number = 90
 ) {
   const parsed = new DOMParser().parseFromString(noteStr, 'text/html');
   const annots = parsed.querySelectorAll('[data-annotation]');
@@ -43,9 +45,13 @@ export async function processZoteroAnnotationNotes(
 
         if (imagePath) {
           const parsed = path.parse(imagePath);
+          const needsConversion =
+            imageFormat && ['webp', 'avif'].includes(imageFormat);
+          const targetExt = needsConversion ? imageFormat : parsed.ext.slice(1);
+
           const destPath = await getAvailablePathForAttachments(
             annotationKey,
-            parsed.ext.slice(1),
+            targetExt,
             destination
           );
 
@@ -67,7 +73,12 @@ export async function processZoteroAnnotationNotes(
               }
             }
 
-            copyFileSync(input, path.join(getVaultRoot(), destPath));
+            const fullDestPath = path.join(getVaultRoot(), destPath);
+            if (needsConversion) {
+              await convertImageToFormat(input, fullDestPath, imageFormat, imageQuality);
+            } else {
+              copyFileSync(input, fullDestPath);
+            }
           } catch (e) {
             new Notice(
               'Error: unable to copy annotation image from Zotero into your vault',
@@ -133,7 +144,9 @@ export async function processZoteroAnnotationNotes(
 
 export async function noteExportPrompt(
   database: DatabaseWithPort,
-  destination?: string
+  destination?: string,
+  imageFormat?: string,
+  imageQuality?: number
 ) {
   const citeKeys = await getCiteKeys(database);
 
@@ -185,7 +198,9 @@ export async function noteExportPrompt(
             key,
             note,
             attachments[key],
-            destination
+            destination,
+            imageFormat,
+            imageQuality
           )
         )
       );

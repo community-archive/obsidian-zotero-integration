@@ -276,9 +276,11 @@ function SettingsComponent({
         >
           <option value="jpg">jpg</option>
           <option value="png">png</option>
+          <option value="webp">webp</option>
+          <option value="avif">avif</option>
         </select>
       </SettingItem>
-      <SettingItem name="Image Quality (jpg only)">
+      <SettingItem name="Image Quality (jpg)">
         <input
           min="0"
           max="100"
@@ -290,6 +292,34 @@ function SettingsComponent({
           }
           type="number"
           defaultValue={settings.pdfExportImageQuality.toString()}
+        />
+      </SettingItem>
+      <SettingItem name="Image Quality (webp)">
+        <input
+          min="0"
+          max="100"
+          onChange={(e) =>
+            updateSetting(
+              'pdfExportImageQualityWebp',
+              Number((e.target as HTMLInputElement).value)
+            )
+          }
+          type="number"
+          defaultValue={(settings.pdfExportImageQualityWebp ?? 80).toString()}
+        />
+      </SettingItem>
+      <SettingItem name="Image Quality (avif)">
+        <input
+          min="0"
+          max="100"
+          onChange={(e) =>
+            updateSetting(
+              'pdfExportImageQualityAvif',
+              Number((e.target as HTMLInputElement).value)
+            )
+          }
+          type="number"
+          defaultValue={(settings.pdfExportImageQualityAvif ?? 50).toString()}
         />
       </SettingItem>
       <SettingItem name="Image DPI">

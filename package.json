@@ -13,8 +13,8 @@
     "clean": "yarn prettier && yarn lint:fix",
     "test": "jest",
     "rlnotes": "git log $(git describe --tags --abbrev=0)..HEAD --oneline > release-notes.md && git add release-notes.md",
-		"bump": "node version-bump.mjs && git add manifest.json versions.json package.json && yarn rlnotes",
-		"release": "git commit -m $npm_package_version && git tag $npm_package_version && git push && git push --tags"
+    "bump": "node version-bump.mjs && git add manifest.json versions.json package.json && yarn rlnotes",
+    "release": "git commit -m $npm_package_version && git tag $npm_package_version && git push && git push --tags"
   },
   "keywords": [],
   "author": "",
@@ -52,6 +52,7 @@
     "xml-js": "1.6.11"
   },
   "dependencies": {
+    "@jsquash/avif": "^2.1.1",
     "download": "8.0.0",
     "escape-path-with-spaces": "1.0.2",
     "execa": "7.1.1",
