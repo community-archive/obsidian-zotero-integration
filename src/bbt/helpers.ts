@@ -1,5 +1,34 @@
+import { readFileSync, writeFileSync } from 'fs';
 import path from 'path';
-import { Database } from 'src/types';
+import { Database, ZoteroConnectorSettings } from 'src/types';
+
+// @ts-ignore — loaded as Uint8Array by esbuild's binary loader
+import avifEncWasm from '@jsquash/avif/codec/enc/avif_enc.wasm';
+import avifEncFactory from '@jsquash/avif/codec/enc/avif_enc.js';
+import { defaultOptions as avifDefaultOptions } from '@jsquash/avif/meta.js';
+import { initEmscriptenModule } from '@jsquash/avif/utils.js';
+
+let avifEncoderPromise: Promise<any> | null = null;
+
+function getAvifEncoder(): Promise<any> {
+  if (!avifEncoderPromise) {
+    avifEncoderPromise = WebAssembly.compile(
+      avifEncWasm as unknown as BufferSource
+    ).then((wasmModule) => initEmscriptenModule(avifEncFactory, wasmModule));
+  }
+  return avifEncoderPromise;
+}
+
+export function getImageQuality(settings: ZoteroConnectorSettings): number {
+  switch (settings.pdfExportImageFormat) {
+    case 'webp':
+      return settings.pdfExportImageQualityWebp ?? 80;
+    case 'avif':
+      return settings.pdfExportImageQualityAvif ?? 50;
+    default:
+      return settings.pdfExportImageQuality ?? 90; // jpg
+  }
+}
 
 export const defaultHeaders = {
   'Content-Type': 'application/json',
@@ -144,6 +173,57 @@ export function getColorCategory(hex: string) {
  * zotero://select/[type]/0_ABCD1234
  * zotero://select/[type]/1234 (not consistent across synced machines)
  */
+export async function convertImageToFormat(
+  inputPath: string,
+  outputPath: string,
+  format: string,
+  quality: number
+): Promise<void> {
+  const inputData = readFileSync(inputPath);
+  const blob = new Blob([inputData]);
+  const url = URL.createObjectURL(blob);
+  try {
+    const img = new Image();
+    img.src = url;
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = reject;
+    });
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext('2d')!;
+    ctx.drawImage(img, 0, 0);
+
+    if (format === 'avif') {
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const avifModule = await getAvifEncoder();
+      const options = { ...avifDefaultOptions, quality };
+      const output = avifModule.encode(
+        new Uint8Array(imageData.data.buffer),
+        imageData.width,
+        imageData.height,
+        options
+      );
+      if (!output) throw new Error('AVIF encoding failed');
+      writeFileSync(outputPath, Buffer.from(output.buffer));
+    } else {
+      // webp (and any other canvas-supported format)
+      const outputBlob = await new Promise<Blob>((resolve, reject) =>
+        canvas.toBlob(
+          (b) =>
+            b ? resolve(b) : reject(new Error('Image conversion failed')),
+          `image/${format}`,
+          quality / 100
+        )
+      );
+      writeFileSync(outputPath, Buffer.from(await outputBlob.arrayBuffer()));
+    }
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 export function getLocalURI(
   ext: 'select' | 'open-pdf',
   uri: string,

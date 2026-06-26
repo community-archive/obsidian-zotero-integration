@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync } from 'fs';
+import { copyFileSync, existsSync, mkdirSync, unlinkSync } from 'fs';
 import { Notice, TFile, htmlToMarkdown, moment, normalizePath } from 'obsidian';
 import path from 'path';
 
@@ -14,7 +14,9 @@ import { CiteKey, getCiteKeyFromAny, getCiteKeys } from './cayw';
 import { processZoteroAnnotationNotes } from './exportNotes';
 import { extractAnnotations } from './extractAnnotations';
 import {
+  convertImageToFormat,
   getColorCategory,
+  getImageQuality,
   getLocalURI,
   mkMDDir,
   sanitizeFilePath,
@@ -109,13 +111,15 @@ function processAnnotation(
   }
 }
 
-function convertNativeAnnotation(
+async function convertNativeAnnotation(
   annotation: any,
   attachment: any,
   imageOutputPath: string,
   imageRelativePath: string,
   imageBaseName: string,
-  copy: boolean = false
+  copy: boolean = false,
+  imageFormat?: string,
+  imageQuality: number = 90
 ) {
   const annot: Record<string, any> = {
     date: moment(annotation.dateModified),
@@ -156,16 +160,20 @@ function convertNativeAnnotation(
 
   if (annotation.annotationImagePath) {
     const parsed = path.parse(annotation.annotationImagePath);
+    const needsConversion =
+      imageFormat && ['webp', 'avif'].includes(imageFormat);
+    const targetExt = needsConversion ? `.${imageFormat}` : parsed.ext;
 
     annot.imageBaseName = `${imageBaseName}-${annot.page}-x${Math.round(
       annot.x
-    )}-y${Math.round(annot.y)}${parsed.ext}`;
+    )}-y${Math.round(annot.y)}${targetExt}`;
     annot.imageRelativePath = normalizePath(
       path.join(imageRelativePath, annot.imageBaseName)
     );
-    annot.imageExtension = parsed.ext.slice(1);
+    annot.imageExtension = targetExt.slice(1);
 
     const imagePath = path.join(imageOutputPath, annot.imageBaseName);
+    let actualImagePath = imagePath;
 
     if (copy) {
       if (!existsSync(imageOutputPath)) {
@@ -182,7 +190,29 @@ function convertNativeAnnotation(
           }
         }
 
-        copyFileSync(input, imagePath);
+        if (needsConversion) {
+          try {
+            await convertImageToFormat(input, imagePath, imageFormat, imageQuality);
+          } catch (convErr) {
+            // Fall back to original format so the embed is never a dangling reference
+            console.error(
+              'Annotation image conversion failed, falling back to original format:',
+              convErr
+            );
+            const fallbackBaseName = `${imageBaseName}-${annot.page}-x${Math.round(
+              annot.x
+            )}-y${Math.round(annot.y)}${parsed.ext}`;
+            actualImagePath = path.join(imageOutputPath, fallbackBaseName);
+            copyFileSync(input, actualImagePath);
+            annot.imageBaseName = fallbackBaseName;
+            annot.imageRelativePath = normalizePath(
+              path.join(imageRelativePath, fallbackBaseName)
+            );
+            annot.imageExtension = parsed.ext.slice(1);
+          }
+        } else {
+          copyFileSync(input, imagePath);
+        }
       } catch (e) {
         new Notice(
           'Error: unable to copy annotation image from Zotero into your vault',
@@ -192,7 +222,7 @@ function convertNativeAnnotation(
       }
     }
 
-    annot.imagePath = imagePath;
+    annot.imagePath = actualImagePath;
   }
 
   if (annotation.tags?.length) {
@@ -733,18 +763,20 @@ export async function exportToMarkdown(
 
       let annots: any[] = [];
 
-      attachmentData[attachmentPath]?.annotations?.forEach((annot: any) => {
+      for (const annot of attachmentData[attachmentPath]?.annotations || []) {
         annots.push(
-          convertNativeAnnotation(
+          await convertNativeAnnotation(
             annot,
             attachment,
             imageOutputPath,
             imageRelativePath,
             imageBaseName,
-            true
+            true,
+            settings.pdfExportImageFormat,
+            getImageQuality(settings)
           )
         );
-      });
+      }
 
       if (annots.length && settings.shouldConcat) {
         annots = concatAnnotations(annots);
@@ -752,14 +784,17 @@ export async function exportToMarkdown(
 
       if (isPDF && canExtract) {
         try {
+          const needsConversion = ['webp', 'avif'].includes(
+            settings.pdfExportImageFormat
+          );
           const res = await extractAnnotations(
             attachmentPath,
             {
               imageBaseName: imageBaseName,
               imageDPI: settings.pdfExportImageDPI,
-              imageFormat: settings.pdfExportImageFormat,
+              imageFormat: needsConversion ? 'png' : settings.pdfExportImageFormat,
               imageOutputPath: imageOutputPath,
-              imageQuality: settings.pdfExportImageQuality,
+              imageQuality: getImageQuality(settings),
               attemptOCR: settings.pdfExportImageOCR,
               ocrLang: settings.pdfExportImageOCRLang,
               tesseractPath: settings.pdfExportImageTesseractPath,
@@ -769,6 +804,30 @@ export async function exportToMarkdown(
           );
 
           let extracted = JSON.parse(res);
+
+          if (needsConversion) {
+            for (const e of extracted) {
+              if (e.imagePath && existsSync(e.imagePath)) {
+                const parsed = path.parse(e.imagePath);
+                const newPath = path.join(
+                  parsed.dir,
+                  `${parsed.name}.${settings.pdfExportImageFormat}`
+                );
+                try {
+                  await convertImageToFormat(
+                    e.imagePath,
+                    newPath,
+                    settings.pdfExportImageFormat,
+                    settings.pdfExportImageQuality
+                  );
+                  unlinkSync(e.imagePath);
+                  e.imagePath = newPath;
+                } catch (err) {
+                  console.error('Failed to convert annotation image:', err);
+                }
+              }
+            }
+          }
 
           for (const e of extracted) {
             processAnnotation(e, attachment, imageRelativePath);
@@ -939,7 +998,7 @@ export async function dataExplorerPrompt(settings: ZoteroConnectorSettings) {
               imageDPI: settings.pdfExportImageDPI,
               imageFormat: settings.pdfExportImageFormat,
               imageOutputPath: path.join(vaultRoot, 'output_path'),
-              imageQuality: settings.pdfExportImageQuality,
+              imageQuality: getImageQuality(settings),
               attemptOCR: settings.pdfExportImageOCR,
               ocrLang: settings.pdfExportImageOCRLang,
               tesseractPath: settings.pdfExportImageTesseractPath,

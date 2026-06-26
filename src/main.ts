@@ -11,6 +11,7 @@ import {
   insertNotesIntoCurrentDoc,
   noteExportPrompt,
 } from './bbt/exportNotes';
+import { getImageQuality } from './bbt/helpers';
 import './bbt/template.helpers';
 import {
   currentVersion,
@@ -34,6 +35,8 @@ const DEFAULT_SETTINGS: ZoteroConnectorSettings = {
   pdfExportImageDPI: 120,
   pdfExportImageFormat: 'jpg',
   pdfExportImageQuality: 90,
+  pdfExportImageQualityWebp: 80,
+  pdfExportImageQualityAvif: 50,
   citeFormats: [],
   exportFormats: [],
   citeSuggestTemplate: '[[{{citekey}}]]',
@@ -93,7 +96,9 @@ export default class ZoteroConnector extends Plugin {
         };
         noteExportPrompt(
           database,
-          this.app.workspace.getActiveFile()?.parent.path
+          this.app.workspace.getActiveFile()?.parent.path,
+          this.settings.pdfExportImageFormat,
+          getImageQuality(this.settings)
         ).then((notes) => {
           if (notes) {
             insertNotesIntoCurrentDoc(editor, notes);
@@ -110,7 +115,12 @@ export default class ZoteroConnector extends Plugin {
           database: this.settings.database,
           port: this.settings.port,
         };
-        noteExportPrompt(database, this.settings.noteImportFolder)
+        noteExportPrompt(
+          database,
+          this.settings.noteImportFolder,
+          this.settings.pdfExportImageFormat,
+          getImageQuality(this.settings)
+        )
           .then((notes) => {
             if (notes) {
               return filesFromNotes(this.settings.noteImportFolder, notes);

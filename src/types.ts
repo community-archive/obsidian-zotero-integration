@@ -86,6 +86,8 @@ export interface ZoteroConnectorSettings {
   pdfExportImageOCR?: boolean;
   pdfExportImageOCRLang?: string;
   pdfExportImageQuality?: number;
+  pdfExportImageQualityAvif?: number;
+  pdfExportImageQualityWebp?: number;
   pdfExportImageTessDataDir?: string;
   pdfExportImageTesseractPath?: string;
   settingsVersion?: number;
