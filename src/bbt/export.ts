@@ -406,8 +406,10 @@ export async function renderTemplates(
     );
   }
 
+
   let main = '';
   let hasPersist = false;
+  const retainedFrontmatter = templateData?._retained?.frontmatter;
 
   if (template) {
     try {
@@ -416,6 +418,10 @@ export async function renderTemplates(
         template,
         templateData
       );
+
+      if (params.settings.persistFrontmatter) {
+        main = PersistExtension.persistFrontmatter(main, retainedFrontmatter);
+      }
       hasPersist = PersistExtension.hasPersist(main);
     } catch (e) {
       if (shouldThrow) {
@@ -534,7 +540,11 @@ export async function renderTemplates(
     output.push(footer);
   }
 
-  return haveAnnotations ? appendExportDate(output.join('')) : output.join('');
+  const rendered = params.settings.persistFrontmatter ?
+    PersistExtension.persistFrontmatter(output.join(''), retainedFrontmatter) :
+    output.join('');
+
+  return haveAnnotations ? appendExportDate(rendered) : rendered;
 }
 
 export function getATemplatePath({ exportFormat }: ExportToMarkdownParams) {

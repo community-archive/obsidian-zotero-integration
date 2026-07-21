@@ -160,7 +160,6 @@ export class PersistExtension implements Extension {
 
     // parse the body and possibly the error block, which is optional
     const body = parser.parseUntilBlocks('endpersist');
-
     parser.advanceAfterBlockEnd();
 
     // See above for notes about CallExtension
@@ -169,13 +168,12 @@ export class PersistExtension implements Extension {
 
   run(context: any, id: string, body: any) {
     let retained = '';
-
     if (context?.ctx?._retained && context.ctx._retained[id]) {
       retained = context.ctx._retained[id];
     }
 
     let trimmed = body() as string;
-    if (retained) trimmed = trimmed.trimStart();
+    if (retained) trimmed = trimmed.replace(/^\r?\n/, '');
 
     return new nunjucks.runtime.SafeString(
       `%% begin ${id} %%${retained}${trimmed}%% end ${id} %%`
@@ -185,6 +183,34 @@ export class PersistExtension implements Extension {
   static hasPersist(str: string) {
     return /%% begin (.+?) %%([\w\W]*?)%% end \1 %%/gi.test(str);
   }
+
+  static getFrontmatter(str: string) {
+    const match = str.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n)?/);
+
+    if (!match) {
+      return null;
+    }
+
+    return {
+      content: match[1],
+      body: str.slice(match[0].length),
+    };
+  }
+
+  static persistFrontmatter(rendered: string, retained_frontmatter?: string) {
+    if (!retained_frontmatter) {
+      return rendered;
+    }
+
+    const frontmatter = this.getFrontmatter(rendered);
+    const preservedFrontmatter = `---\n${retained_frontmatter.trim()}\n---`;
+
+    if (!frontmatter) {
+      return rendered ? `${preservedFrontmatter}\n${rendered}` : preservedFrontmatter;
+    }
+    return frontmatter.body ? `${preservedFrontmatter}\n${frontmatter.body}` : preservedFrontmatter;
+  }
+
   static prepareTemplateData<T>(templateData: T, md: string): T & WithRetained {
     const out: Record<string, string> = {};
 
@@ -193,6 +219,11 @@ export class PersistExtension implements Extension {
     const matches = md.matchAll(/%% begin (.+?) %%([\w\W]*?)%% end \1 %%/gi);
     for (const match of matches) {
       out[match[1]] = match[2];
+    }
+
+    const frontmatter = this.getFrontmatter(md);
+    if (frontmatter) {
+      out['frontmatter'] = frontmatter.content;
     }
 
     return {

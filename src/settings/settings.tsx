@@ -50,6 +50,9 @@ function SettingsComponent({
   const [ocrState, setOCRState] = React.useState(settings.pdfExportImageOCR);
 
   const [concat, setConcat] = React.useState(!!settings.shouldConcat);
+  const [persistFrontmatter, setPersistFrontmatter] = React.useState(
+!!settings.persistFrontmatter
+  );
 
   const updateCite = React.useCallback(
     debounce(
@@ -220,6 +223,20 @@ function SettingsComponent({
             });
           }}
           className={`checkbox-container${concat ? ' is-enabled' : ''}`}
+        />
+      </SettingItem>
+      <SettingItem
+        name="Persist Frontmatter"
+        description="Frontmatter (i.e., Obsidian properties) will be preserved when rendering templates."
+      >
+        <div
+          onClick={() => {
+            setPersistFrontmatter((state) => {
+              updateSetting('persistFrontmatter', !state);
+              return !state;
+            });
+          }}
+          className={`checkbox-container${persistFrontmatter ? ' is-enabled' : ''}`}
         />
       </SettingItem>
       <SettingItem name="Citation Formats" isHeading />

@@ -90,6 +90,7 @@ export interface ZoteroConnectorSettings {
   pdfExportImageTesseractPath?: string;
   settingsVersion?: number;
   shouldConcat?: boolean;
+  persistFrontmatter?: boolean;
   whichNotesToOpenAfterImport: NotesToOpenAfterImport;
 }
 
