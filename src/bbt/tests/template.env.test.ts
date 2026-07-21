@@ -291,6 +291,68 @@ one
       )
     ).toEqual(expected);
   });
+
+  it('replaces rendered frontmatter with existing frontmatter', () => {
+    const existing = `
+---
+title: Old Title
+---
+# Old Body
+    `.trim();
+
+    const rendered = `
+---
+title: New Title
+---
+# Hello
+    `.trim();
+
+    const expected = `
+---
+title: Old Title
+---
+# Hello
+    `.trim();
+
+    const templateData = PersistExtension.prepareTemplateData({}, existing);
+
+    expect(
+      PersistExtension.persistFrontmatter(
+        rendered,
+        templateData._retained?.frontmatter
+      )
+    ).toEqual(expected);
+  });
+
+
+  it('preserves existing frontmatter when new rendered output has no frontmatter', () => {
+    const existing = `
+---
+title: Old Title
+---
+# Old Body
+    `.trim();
+
+    const rendered = `
+# New Body
+    `.trim();
+
+    const expected = `
+---
+title: Old Title
+---
+# New Body
+    `.trim();
+
+    const templateData = PersistExtension.prepareTemplateData({}, existing);
+
+    expect(
+      PersistExtension.persistFrontmatter(
+        rendered,
+        templateData._retained?.frontmatter
+      )
+    ).toEqual(expected);
+  });
 });
 
 describe('class ObsidianMarkdownLoader', () => {
