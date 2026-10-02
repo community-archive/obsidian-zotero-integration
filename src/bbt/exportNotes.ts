@@ -9,9 +9,9 @@ import {
   normalizePath,
 } from 'obsidian';
 import path from 'path';
-import { getVaultRoot } from 'src/helpers';
-import { DatabaseWithPort } from 'src/types';
 
+import { getVaultRoot } from '../helpers';
+import { DatabaseWithPort } from '../types';
 import { getCiteKeys } from './cayw';
 import { getLocalURI, mkMDDir, sanitizeFilePath } from './helpers';
 import { getAttachmentsFromCiteKey, getNotesFromCiteKeys } from './jsonRPC';
@@ -248,7 +248,14 @@ export async function filesFromNotes(
   const files: TFile[] = [];
 
   for (const key of keys) {
-    const file = await newFile(folder, key, notes[key]);
+    const content = notes[key];
+
+    if (!content.trim()) {
+      new Notice(`No note content found for "${key}"; file was not written`, 7000);
+      continue;
+    }
+
+    const file = await newFile(folder, key, content);
     if (!file) {
       break;
     }
