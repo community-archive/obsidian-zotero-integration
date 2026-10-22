@@ -859,10 +859,12 @@ export async function renderCiteTemplate(params: RenderCiteTemplateParams) {
       (a: any) => a.annotations?.length
     );
 
-    const templateData = {
+    // Add the same derived fields (authors, allTags, pdfLink, ...) that the
+    // Data Explorer and import templates get.
+    const templateData = await applyBasicTemplates('', {
       attachment: firstAnnots || attachments.length ? attachments[0] : null,
       ...item,
-    };
+    });
 
     output.push(await renderTemplate('', format.template, templateData));
   }
