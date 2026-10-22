@@ -919,8 +919,8 @@ export async function dataExplorerPrompt(settings: ZoteroConnectorSettings) {
             annot,
             attachment,
             path.join(vaultRoot, 'output_path'),
-            'base_name',
-            'output_path'
+            'output_path',
+            'base_name'
           )
         );
       });
